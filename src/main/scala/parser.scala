@@ -211,8 +211,7 @@ class Parser extends JavaTokenParsers {
   def small_statement_list: Parser[List[Node]] = rep1sep(small_statement, ";")
 
   def compound_statement: Parser[Node] = (
-        if_elif_else_stmt
-      | if_else_stmt
+        if_else_stmt
       | while_stmt
       | funcdef
       | classdef
