@@ -6,13 +6,13 @@ object Priority {
                      "and"->3,
                      "is"->8, "<"->8, ">"->8, ">="->8, "<="->8, "=="->8, "!="->8,
                      "+"->9,  "-"->9,
-                     "*"->10, "/"->10, "%"->10)
+                     "*"->10, "/"->10, "%"->10,
+                     "**"->11)
 
     val unary = Map("not"->4,
                     "+"->12,  "-"->12)
 }
 
-// sealed trait Node would be also OK
 sealed abstract class Node {
     def toStr = "error: toStr not implemented"
     val indent = " " * 4
@@ -45,11 +45,11 @@ case class Variable(name: String) extends Node {
 case class Unary(op: String, expr: Node) extends Node {
 
     override def toStr = {
-        var str  = expr.toStr 
+        var str  = expr.toStr
         expr match {
             case e@BinExpr(_,_,_) => if(Priority.binary(e.op)<=Priority.unary(op)) { str = "(" + str + ")" }
             case e@Unary(_,_) => if(Priority.unary(e.op)<=Priority.unary(op)) { str = "(" + str + ")" }
-            case _ => 
+            case _ =>
         }
         op + " " + str
     }
@@ -59,17 +59,17 @@ case class Unary(op: String, expr: Node) extends Node {
 case class BinExpr(op: String, left: Node, right: Node) extends Node {
 
     override def toStr = {
-        var leftStr  = left.toStr 
+        var leftStr  = left.toStr
         var rightStr = right.toStr
         left match {
             case l@(_:BinExpr) => if(Priority.binary(l.op)<Priority.binary(op)) { leftStr = "(" + leftStr + ")" }
             case l@(_:Unary) => if(Priority.unary(l.op)<Priority.binary(op)) { leftStr = "(" + leftStr + ")" }
-            case _ => 
+            case _ =>
         }
         right match {
             case r@BinExpr(_,_,_) => if(Priority.binary(r.op)<Priority.binary(op)) { rightStr = "(" + rightStr + ")" }
             case r@Unary(_,_) => if(Priority.unary(r.op)<Priority.binary(op)) { rightStr = "(" + rightStr + ")" }
-            case _ => 
+            case _ =>
         }
         leftStr + " " + op + " " + rightStr
     }
@@ -95,22 +95,17 @@ case class GetAttr(expr:Node, attr: String) extends Node {
     override def toStr = expr.toStr + "." + attr
 }
 
-case class IfInstr(cond: Node, left: Node) extends Node {
-    override def toStr = {
-        var str = "if " + cond.toStr + ":\n"
-        str += left.toStr.replaceAll("(?m)^", indent)
-        str
-    }
-}
+case class ConditionalSuite(cond: Node, suite: Node)
 
-case class IfElseInstr(cond: Node, left: Node, right: Node) extends Node {
+case class IfElifElseInstruction(ifClause: ConditionalSuite, elifClauses: List[ConditionalSuite], elseClause: Option[Node]) extends Node {
     override def toStr = {
-        var str = "if " + cond.toStr + ":\n"
-        str += left.toStr.replaceAll("(?m)^", indent)
-        str += "\nelse:\n"
-        str += right.toStr.replaceAll("(?m)^", indent)
-        str
+      var str = formatConditionalClause("if")(ifClause) + elifClauses.map(formatConditionalClause("\nelif")).mkString
+      if (elseClause isDefined) str += "\nelse:\n" + elseClause.get.toStr.replaceAll("(?m)^", indent)
+      str
     }
+
+    private def formatConditionalClause(instruction:String)(clause: ConditionalSuite) =
+      instruction + clause.cond + ":\n" + clause.suite.toStr.replaceAll("(?m)^", indent)
 }
 
 case class WhileInstr(cond: Node, body: Node) extends Node {
@@ -120,7 +115,7 @@ case class WhileInstr(cond: Node, body: Node) extends Node {
 }
 
 case class InputInstr() extends Node {
-    override def toStr = "input()" 
+    override def toStr = "input()"
 }
 
 case class ReturnInstr(expr: Node) extends Node {
@@ -152,17 +147,17 @@ case class FunDef(name: String, formal_args: Node, body: Node) extends Node {
 case class LambdaDef(formal_args: Node, body: Node) extends Node {
     override def toStr = "lambda " + formal_args.toStr + ": " + body.toStr
 }
-        
+
 case class ClassDef(name: String, inherit_list: Node, suite: Node) extends Node {
     override def toStr = {
         val str = "\nclass " + name
         var inheritStr = ""
         val suiteStr = ":\n" + suite.toStr.replaceAll("(?m)^", indent)
         inherit_list match {
-            case NodeList(x) => if(x.length>0) inheritStr = "(" + x.map(_.toStr).mkString("", ",", "") + ")" 
+            case NodeList(x) => if(x.nonEmpty) inheritStr = "(" + x.map(_.toStr).mkString("", ",", "") + ")"
             case _ =>
-       }
-       str + inheritStr + suiteStr
+        }
+        str + inheritStr + suiteStr
     }
 }
 
@@ -185,10 +180,12 @@ case class ElemList(list: List[Node]) extends Node {
 }
 
 case class Tuple(list: List[Node]) extends Node {
-    override def toStr = if(list.length==0) "()"
-                         else if(list.length==1) "(" + list(0).toStr + ",)"
+    override def toStr = if(list.isEmpty) "()"
+                         else if(list.length==1) "(" + list.head.toStr + ",)"
                          else list.map(_.toStr).mkString("(", ",", ")")
 }
 
-
+case class EmptyReturn() extends Node {
+    override def toStr = ""
+}
         
